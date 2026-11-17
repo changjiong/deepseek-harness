@@ -4,8 +4,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 ENV DSH_HOME=/data/dsh
 
-# 官方 Debian 源在本机实测仅 20KB/s，换腾讯云镜像；
-# 必须用 http 协议，因为 slim 镜像内还没有 ca-certificates，https 会证书校验失败
+# 官方 Debian 源实测 20KB/s，换腾讯云镜像；
+# 必须 http，slim 镜像内无 ca-certificates，https 会证书校验失败
 RUN set -eux; \
     if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
       sed -i 's|deb.debian.org|mirrors.cloud.tencent.com|g; \
@@ -19,7 +19,7 @@ RUN set -eux; \
         /etc/apt/sources.list; \
     fi
 
-# 编译 node-pty / koffi 等原生模块所需工具链
+# 原生模块编译工具链：node-pty、koffi、dsh-subprocess-local
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       python3 make g++ ca-certificates git curl \
@@ -27,13 +27,15 @@ RUN apt-get update \
 
 WORKDIR /opt/dsh
 
-# 直接安装官方发布包，不构建源码，规避 monorepo 在 2C7G 上的 OOM 风险
+# 安装官方发布包 + 批准依赖脚本 + 强制重编译原生模块 + 构建期自检
 RUN npm init -y >/dev/null \
- && npm install @deepseek-ai/dsh@0.2.2-rc.3 --no-audit --no-fund
+ && npm install @deepseek-ai/dsh@0.2.2-rc.3 --no-audit --no-fund \
+ && (npm install-scripts approve node-pty koffi @deepseek-ai/dsh-subprocess-local protobufjs || true) \
+ && npm rebuild --foreground-scripts node-pty koffi @deepseek-ai/dsh-subprocess-local \
+ && node -e "require('node-pty'); require('koffi'); console.log('native modules OK')"
 
 RUN mkdir -p /data/dsh
 
 EXPOSE 3080
 
-# dsh 拒绝绑定 0.0.0.0，必须传具体网卡 IP
 CMD ["sh", "-c", "exec ./node_modules/.bin/dsh web --host $(hostname -i | awk '{print $1}') --port 3080 --no-open"]
