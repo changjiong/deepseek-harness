@@ -38,4 +38,4 @@ RUN mkdir -p /data/dsh
 
 EXPOSE 3080
 
-CMD ["sh", "-c", "exec ./node_modules/.bin/dsh web --host $(hostname -i | awk '{print $1}') --port 3080 --no-open"]
+CMD ["sh", "-c", "exec ./node_modules/.bin/dsh web --host $(hostname -i | awk '{print $1}') --port 3080 --no-open ${DSH_PUBLIC_URL:+--public-url $DSH_PUBLIC_URL} ${DSH_TRUSTED_HOST:+--trusted-host $DSH_TRUSTED_HOST}"]
